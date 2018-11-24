@@ -168,8 +168,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		vmConfig:       vmConfig,
 		badBlocks:      badBlocks,
 	}
-	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
-	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
+	bc.validator = NewBlockValidator(chainConfig, bc, engine)
+	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
@@ -331,8 +331,8 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	}
 	// If all checks out, manually set the head block
 	bc.mu.Lock()
-	bc.currentBlock.Store(block)
-	bc.mu.Unlock()
+	defer bc.mu.Unlock()
+	go bc.currentBlock.Store(block)
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
@@ -356,18 +356,18 @@ func (bc *BlockChain) CurrentFastBlock() *types.Block {
 }
 
 // SetProcessor sets the processor required for making state modifications.
-func (bc *BlockChain) SetProcessor(processor Processor) {
-	bc.procmu.Lock()
-	defer bc.procmu.Unlock()
-	bc.processor = processor
-}
+//func (bc *BlockChain) SetProcessor(processor Processor) {
+//	bc.procmu.Lock()
+//	defer bc.procmu.Unlock()
+//	bc.processor = processor
+//}
 
 // SetValidator sets the validator which is used to validate incoming blocks.
-func (bc *BlockChain) SetValidator(validator Validator) {
-	bc.procmu.Lock()
-	defer bc.procmu.Unlock()
-	bc.validator = validator
-}
+//func (bc *BlockChain) SetValidator(validator Validator) {
+//	bc.procmu.Lock()
+//	defer bc.procmu.Unlock()
+//	bc.validator = validator
+//}
 
 // Validator returns the current validator.
 func (bc *BlockChain) Validator() Validator {
