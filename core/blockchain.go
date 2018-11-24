@@ -191,7 +191,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			// make sure the headerByNumber (if present) is in our current canonical chain
 			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
 				log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-				bc.SetHead(header.Number.Uint64() - 1)
+				err := bc.SetHead(header.Number.Uint64() - 1)
+				_ = err // TODO: something about the error
 				log.Error("Chain rewind was successful, resuming normal operation")
 			}
 		}
@@ -711,7 +712,8 @@ func (bc *BlockChain) procFutureBlocks() {
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			_, err := bc.InsertChain(blocks[i : i+1])
+			_ = err // TODO: do something about an error
 		}
 	}
 }
@@ -941,7 +943,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 				limit       = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
 			)
 			if nodes > limit || imgs > 4*1024*1024 {
-				triedb.Cap(limit - ethdb.IdealBatchSize)
+				err := triedb.Cap(limit - ethdb.IdealBatchSize)
+				_ = err // TODO: something about an error
 			}
 			// Find the next state trie we need to commit
 			header := bc.GetHeaderByNumber(current - triesInMemory)
@@ -955,7 +958,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 				}
 				// Flush an entire trie and restart the counters
-				triedb.Commit(header.Root, true)
+				err := triedb.Commit(header.Root, true)
+				_ = err // TODO: something about an error
 				lastWrite = chosen
 				bc.gcproc = 0
 			}
