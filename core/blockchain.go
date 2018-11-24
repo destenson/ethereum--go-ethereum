@@ -1032,7 +1032,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	n, events, logs, err := bc.insertChain(chain)
-	bc.PostChainEvents(events, logs)
+	go bc.PostChainEvents(events, logs)
 	return n, err
 }
 
@@ -1163,7 +1163,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			}
 
 		case err != nil:
-			bc.reportBlock(block, nil, err)
+			go bc.reportBlock(block, nil, err)
 			return i, events, coalescedLogs, err
 		}
 		// Create a new statedb using the parent block and report an
@@ -1181,13 +1181,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
+			go bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
 		// Validate the state using the default validator
 		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
+			go bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
 		proctime := time.Since(bstart)
@@ -1221,7 +1221,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.usedGas += usedGas
 
 		cache, _ := bc.stateCache.TrieDB().Size()
-		stats.report(chain, i, cache)
+		go stats.report(chain, i, cache)
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
