@@ -334,7 +334,11 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 			d.dropPeer(id)
 		}
 	default:
-		log.Warn("Synchronisation failed, retrying", "err", err)
+		if err == errCancelHeaderFetch {
+			log.Warn("Synchronisation aborting", "msg", err)
+		} else {
+			log.Warn("Synchronisation failed, retrying", "err", err)
+		}
 	}
 	return err
 }
