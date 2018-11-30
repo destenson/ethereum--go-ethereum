@@ -33,19 +33,20 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	colorable "github.com/mattn/go-colorable"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func generateEndpoints(scheme string, cluster string, app string, from int, to int) {
+func generateEndpoints(scheme string, cluster string, from int, to int) {
 	if cluster == "prod" {
 		for port := from; port <= to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, port))
 		}
 	} else {
 		for port := from; port <= to; port++ {
-			endpoints = append(endpoints, fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, port, cluster))
+			endpoints = append(endpoints, fmt.Sprintf("%s://swarm-%v-%s.stg.swarm-gateways.net", scheme, port, cluster))
 		}
 	}
 
@@ -56,11 +57,11 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 
 func cliUploadAndSync(c *cli.Context) error {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
-	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "kb", filesize) }(time.Now())
+	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
 
-	generateEndpoints(scheme, cluster, appName, from, to)
+	generateEndpoints(scheme, cluster, from, to)
 
 	log.Info("uploading to " + endpoints[0] + " and syncing")
 
