@@ -105,6 +105,7 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	return db.db.Put(key, value, nil)
 }
 
+// Has returns if the db contain the given key
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
 	return db.db.Has(key, nil)
 }
