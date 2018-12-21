@@ -259,8 +259,11 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true)
+	hash, err := statedb.Commit(false)
+	_ = hash
+	_ = err // TODO: something about an error
+	err = statedb.Database().TrieDB().Commit(root, true)
+	_ = err // TODO: something about an error
 
 	return types.NewBlock(head, nil, nil, nil)
 }

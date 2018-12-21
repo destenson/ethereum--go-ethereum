@@ -483,7 +483,8 @@ func (c *ChainIndexer) setSectionHead(section uint64, hash common.Hash) {
 	var data [8]byte
 	binary.BigEndian.PutUint64(data[:], section)
 
-	c.indexDb.Put(append([]byte("shead"), data[:]...), hash.Bytes())
+	err := c.indexDb.Put(append([]byte("shead"), data[:]...), hash.Bytes())
+	_ = err // TODO: something about an error
 }
 
 // removeSectionHead removes the reference to a processed section from the index
@@ -492,5 +493,6 @@ func (c *ChainIndexer) removeSectionHead(section uint64) {
 	var data [8]byte
 	binary.BigEndian.PutUint64(data[:], section)
 
-	c.indexDb.Delete(append([]byte("shead"), data[:]...))
+	err := c.indexDb.Delete(append([]byte("shead"), data[:]...))
+	_ = err // TODO: something about an error
 }

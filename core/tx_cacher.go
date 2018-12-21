@@ -62,7 +62,9 @@ func newTxSenderCacher(threads int) *txSenderCacher {
 func (cacher *txSenderCacher) cache() {
 	for task := range cacher.tasks {
 		for i := 0; i < len(task.txs); i += task.inc {
-			types.Sender(task.signer, task.txs[i])
+			addr, err := types.Sender(task.signer, task.txs[i])
+			_ = addr
+			_ = err // TODO: something about an error
 		}
 	}
 }

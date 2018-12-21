@@ -164,7 +164,8 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 			}
 			rawdb.DeleteCanonicalHash(batch, i)
 		}
-		batch.Write()
+		err := batch.Write()
+		_ = err // TODO: something about an error
 
 		// Overwrite any stale canonical number assignments
 		var (
@@ -476,7 +477,8 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	for i := height; i > head; i-- {
 		rawdb.DeleteCanonicalHash(batch, i)
 	}
-	batch.Write()
+	err := batch.Write()
+	_ = err // TODO: something about an error
 
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()

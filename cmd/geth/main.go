@@ -264,9 +264,9 @@ func geth(ctx *cli.Context) error {
 	if args := ctx.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
-	node := makeFullNode(ctx)
-	startNode(ctx, node)
-	node.Wait()
+	gethNode := makeFullNode(ctx)
+	startNode(ctx, gethNode)
+	gethNode.Wait()
 	return nil
 }
 
