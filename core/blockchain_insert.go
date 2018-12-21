@@ -29,13 +29,19 @@ import (
 type insertStats struct {
 	queued, processed, ignored int
 	usedGas                    uint64
+	maxGas                     uint64
 	lastIndex                  int
 	startTime                  mclock.AbsTime
 }
 
 // statsReportLimit is the time limit during import and export after which we
 // always print out progress. This avoids the user wondering what's going on.
-const statsReportLimit = 8 * time.Second
+const statsReportLimit = 60 * time.Second
+
+func speed(usedGas uint64, elapsed time.Duration) float64 {
+	// ~14s/blk / max 	return float64(st.usedGas)
+	return float64(usedGas) / float64(elapsed) * 14000000 / 8000000 * 100
+}
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
@@ -55,13 +61,16 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 		end := chain[index]
 
 		// Assemble the log context and send it to the logger
-		sp := float64(st.usedGas) * 1000 / float64(elapsed) * 14000000 / 8000000 * 100 // ~14s/blk / max 8Mgas/blk = blk/s @ max gas
 		context := []interface{}{
-			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
-			"elapsed", common.PrettyDuration(elapsed), "speed%", sp,
-			"number", end.Number(), "hash", end.Hash(),
+			"blocks", st.processed,
+			"txs", txs,
+			"mgas", float64(st.usedGas) / 1000000,
+			"elapsed", common.PrettyDuration(elapsed),
+			"speed%", speed(st.usedGas, elapsed/1000),
+			"number", end.Number(),
+			"hash", end.Hash(),
 		}
-		if timestamp := time.Unix(end.Time().Int64(), 0); time.Since(timestamp) > time.Minute {
+		if timestamp := time.Unix(end.Time().Int64(), 0); time.Since(timestamp) > time.Minute/4 {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
 		context = append(context, []interface{}{"cache", cache}...)

@@ -35,7 +35,7 @@ import (
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
-	SyncMode: downloader.FastSync,
+	SyncMode: downloader.FullSync,
 	Ethash: ethash.Config{
 		CacheDir:       "ethash",
 		CachesInMem:    2,
@@ -49,9 +49,9 @@ var DefaultConfig = Config{
 	TrieCleanCache: 256,
 	TrieDirtyCache: 256,
 	TrieTimeout:    60 * time.Minute,
-	MinerGasFloor:  8000000,
-	MinerGasCeil:   8000000,
-	MinerGasPrice:  big.NewInt(params.GWei),
+	MinerGasFloor:  20000,
+	MinerGasCeil:   6000000000,
+	MinerGasPrice:  big.NewInt(params.GWei * 1e-3),
 	MinerRecommit:  3 * time.Second,
 
 	TxPool: core.DefaultTxPoolConfig,
@@ -86,6 +86,9 @@ type Config struct {
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
 	NoPruning bool
+
+	// Whitelist of required block number -> hash values to accept
+	Whitelist map[uint64]common.Hash `toml:"-"`
 
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
@@ -126,8 +129,12 @@ type Config struct {
 
 	// Type of the EWASM interpreter ("" for default)
 	EWASMInterpreter string
+
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
+
+	// Constantinople block override (TODO: remove after the fork)
+	ConstantinopleOverride *big.Int
 }
 
 type configMarshaling struct {

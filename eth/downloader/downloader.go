@@ -338,7 +338,11 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 			d.dropPeer(id)
 		}
 	default:
-		log.Warn("Synchronisation failed, retrying", "err", err)
+		if err == errCancelHeaderFetch {
+			log.Warn("Synchronisation aborting", "msg", err)
+		} else {
+			log.Warn("Synchronisation failed, retrying", "err", err)
+		}
 	}
 	return err
 }
@@ -409,13 +413,14 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
-	d.mux.Post(StartEvent{})
+	err = d.mux.Post(StartEvent{})
+	_ = err // TODO: something about an error
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.mux.Post(FailedEvent{err})
+			_ = d.mux.Post(FailedEvent{err}) // TODO: something about an error
 		} else {
-			d.mux.Post(DoneEvent{})
+			_ = d.mux.Post(DoneEvent{}) // TODO: something about an error
 		}
 	}()
 	if p.version < 62 {
@@ -555,7 +560,8 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 
 	// Request the advertised remote head block and wait for the response
 	head, _ := p.peer.Head()
-	go p.peer.RequestHeadersByHash(head, 1, 0, false)
+	err := p.peer.RequestHeadersByHash(head, 1, 0, false)
+	_ = err // TODO: something about an error
 
 	ttl := d.requestTTL()
 	timeout := time.After(ttl)
@@ -782,7 +788,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		ttl := d.requestTTL()
 		timeout := time.After(ttl)
 
-		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
+		err := p.peer.RequestHeadersByNumber(check, 1, 0, false)
+		_ = err // TODO: something about an error
 
 		// Wait until a reply arrives to this request
 		for arrived := false; !arrived; {
@@ -876,10 +883,12 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
+			err := p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
+			_ = err // TODO: something about an error
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
+			err := p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
+			_ = err // TODO: something about an error
 		}
 	}
 	// Start pulling the header chain skeleton until all is done

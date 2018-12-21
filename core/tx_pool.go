@@ -146,14 +146,14 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	Rejournal: time.Hour,
 
 	PriceLimit: 1,
-	PriceBump:  10,
+	PriceBump:  2,
 
 	AccountSlots: 16,
 	GlobalSlots:  4096,
 	AccountQueue: 64,
 	GlobalQueue:  1024,
 
-	Lifetime: 3 * time.Hour,
+	Lifetime: 30 * time.Second,
 }
 
 // sanitize checks the provided user configurations and changes anything that's

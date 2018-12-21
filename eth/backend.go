@@ -118,7 +118,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.ConstantinopleOverride)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -173,7 +173,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
 		return nil, err
 	}
 
@@ -320,8 +320,8 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 		return etherbase, nil
 	}
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
+		if accts := wallets[0].Accounts(); len(accts) > 0 {
+			etherbase := accts[0].Address
 
 			s.lock.Lock()
 			s.etherbase = etherbase
@@ -426,13 +426,13 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		if clique, ok := s.engine.(*clique.Clique); ok {
+		if cliq, ok := s.engine.(*clique.Clique); ok {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
 				log.Error("Etherbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
 			}
-			clique.Authorize(eb, wallet.SignHash)
+			cliq.Authorize(eb, wallet.SignHash)
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.

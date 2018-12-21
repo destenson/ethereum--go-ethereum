@@ -164,7 +164,8 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 			}
 			rawdb.DeleteCanonicalHash(batch, i)
 		}
-		batch.Write()
+		err := batch.Write()
+		_ = err // TODO: something about an error
 
 		// Overwrite any stale canonical number assignments
 		var (
@@ -333,9 +334,8 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		// in this case it is cheaper to just read the header
 		if header := hc.GetHeader(hash, number); header != nil {
 			return header.ParentHash, number - 1
-		} else {
-			return common.Hash{}, 0
 		}
+		return common.Hash{}, 0
 	}
 	for ancestor != 0 {
 		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
@@ -477,7 +477,8 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	for i := height; i > head; i-- {
 		rawdb.DeleteCanonicalHash(batch, i)
 	}
-	batch.Write()
+	err := batch.Write()
+	_ = err // TODO: something about an error
 
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()

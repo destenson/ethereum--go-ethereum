@@ -17,6 +17,8 @@
 // Package core implements the Ethereum consensus protocol.
 package core
 
+// NOTE: any changes here should also go in light/lightchain.go
+
 import (
 	"errors"
 	"fmt"
@@ -110,7 +112,7 @@ type BlockChain struct {
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
-	procmu  sync.RWMutex // block processor lock
+	//procmu  sync.RWMutex // block processor lock
 
 	checkpoint       int          // checkpoint counts towards the new checkpoint
 	currentBlock     atomic.Value // Current head of the block chain
@@ -173,8 +175,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		vmConfig:       vmConfig,
 		badBlocks:      badBlocks,
 	}
-	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
-	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
+	bc.validator = NewBlockValidator(chainConfig, bc, engine)
+	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
@@ -196,18 +198,24 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			// make sure the headerByNumber (if present) is in our current canonical chain
 			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
 				log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-				bc.SetHead(header.Number.Uint64() - 1)
+				err := bc.SetHead(header.Number.Uint64() - 1)
+				_ = err // TODO: something about the error
 				log.Error("Chain rewind was successful, resuming normal operation")
 			}
 		}
 	}
 	// Take ownership of this particular state
-	go bc.update()
+	go bc.update() // TODO: should this be go
 	return bc, nil
 }
 
 func (bc *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
+}
+
+// GetVMConfig returns the block chain VM config.
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -336,8 +344,8 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	}
 	// If all checks out, manually set the head block
 	bc.mu.Lock()
-	bc.currentBlock.Store(block)
-	bc.mu.Unlock()
+	defer bc.mu.Unlock()
+	go bc.currentBlock.Store(block)
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
@@ -361,30 +369,30 @@ func (bc *BlockChain) CurrentFastBlock() *types.Block {
 }
 
 // SetProcessor sets the processor required for making state modifications.
-func (bc *BlockChain) SetProcessor(processor Processor) {
-	bc.procmu.Lock()
-	defer bc.procmu.Unlock()
-	bc.processor = processor
-}
+//func (bc *BlockChain) SetProcessor(processor Processor) {
+//	bc.procmu.Lock()
+//	defer bc.procmu.Unlock()
+//	bc.processor = processor
+//}
 
 // SetValidator sets the validator which is used to validate incoming blocks.
-func (bc *BlockChain) SetValidator(validator Validator) {
-	bc.procmu.Lock()
-	defer bc.procmu.Unlock()
-	bc.validator = validator
-}
+//func (bc *BlockChain) SetValidator(validator Validator) {
+//	bc.procmu.Lock()
+//	defer bc.procmu.Unlock()
+//	bc.validator = validator
+//}
 
 // Validator returns the current validator.
 func (bc *BlockChain) Validator() Validator {
-	bc.procmu.RLock()
-	defer bc.procmu.RUnlock()
+	//bc.procmu.RLock()
+	//defer bc.procmu.RUnlock()
 	return bc.validator
 }
 
 // Processor returns the current processor.
 func (bc *BlockChain) Processor() Processor {
-	bc.procmu.RLock()
-	defer bc.procmu.RUnlock()
+	//bc.procmu.RLock()
+	//defer bc.procmu.RUnlock()
 	return bc.processor
 }
 
@@ -734,7 +742,8 @@ func (bc *BlockChain) procFutureBlocks() {
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			_, err := bc.InsertChain(blocks[i : i+1])
+			_ = err // TODO: do something about an error
 		}
 	}
 }
@@ -963,8 +972,10 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 				nodes, imgs = triedb.Size()
 				limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
 			)
+			//log.Info("Processed block", "current", current, "limit", limit, "nodes", nodes, "imgs", imgs)
 			if nodes > limit || imgs > 4*1024*1024 {
-				triedb.Cap(limit - ethdb.IdealBatchSize)
+				err := triedb.Cap(limit - ethdb.IdealBatchSize)
+				_ = err // TODO: something about an error
 			}
 			// Find the next state trie we need to commit
 			header := bc.GetHeaderByNumber(current - triesInMemory)
@@ -974,11 +985,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
 				// If we're exceeding limits but haven't reached a large enough memory gap,
 				// warn the user that the system is becoming unstable.
-				if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+				if chosen < lastWrite+triesInMemory && bc.gcproc >= 2 * bc.cacheConfig.TrieTimeLimit {
 					log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 				}
 				// Flush an entire trie and restart the counters
-				triedb.Commit(header.Root, true)
+				err := triedb.Commit(header.Root, true)
+				_ = err // TODO: something about an error
 				lastWrite = chosen
 				bc.gcproc = 0
 			}
@@ -1117,6 +1129,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	headers := make([]*types.Header, len(chain))
 	seals := make([]bool, len(chain))
 
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
 	for i, block := range chain {
 		headers[i] = block.Header()
 		seals[i] = verifySeals
@@ -1186,20 +1201,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if parent == nil {
 			parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		}
-		state, err := state.New(parent.Root(), bc.stateCache)
+		newState, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
 		t0 := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, newState, bc.vmConfig)
 		t1 := time.Now()
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
 		// Validate the state using the default validator
-		if err := bc.Validator().ValidateState(block, parent, state, receipts, usedGas); err != nil {
+		if err := bc.Validator().ValidateState(block, parent, newState, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
@@ -1207,7 +1222,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		proctime := time.Since(start)
 
 		// Write the block to the chain and get the status.
-		status, err := bc.WriteBlockWithState(block, receipts, state)
+		status, err := bc.WriteBlockWithState(block, receipts, newState)
 		t3 := time.Now()
 		if err != nil {
 			return it.index, events, coalescedLogs, err
@@ -1240,6 +1255,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		blockInsertTimer.UpdateSince(start)
 		stats.processed++
 		stats.usedGas += usedGas
+		stats.maxGas += block.GasLimit()
 
 		cache, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, cache)
@@ -1401,8 +1417,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 			receipts := rawdb.ReadReceipts(bc.db, hash, *number)
 			for _, receipt := range receipts {
-				for _, log := range receipt.Logs {
-					del := *log
+				for _, logEntry := range receipt.Logs {
+					del := *logEntry
 					del.Removed = true
 					deletedLogs = append(deletedLogs, &del)
 				}
@@ -1479,7 +1495,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	for _, tx := range diff {
 		rawdb.DeleteTxLookupEntry(batch, tx.Hash())
 	}
-	batch.Write()
+	err := batch.Write()
+	_ = err // TODO: something about an error
 
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
@@ -1498,13 +1515,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 // PostChainEvents iterates over the events generated by a chain insertion and
 // posts them into the event feed.
 // TODO: Should not expose PostChainEvents. The chain events should be posted in WriteBlock.
+// TODO: shouldn't chain events only be posted when updating with a new block & not syncing?
 func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 	// post event logs for further processing
 	if logs != nil {
 		bc.logsFeed.Send(logs)
 	}
-	for _, event := range events {
-		switch ev := event.(type) {
+	for _, evt := range events {
+		switch ev := evt.(type) {
 		case ChainEvent:
 			bc.chainFeed.Send(ev)
 
@@ -1523,7 +1541,7 @@ func (bc *BlockChain) update() {
 	for {
 		select {
 		case <-futureTimer.C:
-			bc.procFutureBlocks()
+			go bc.procFutureBlocks()
 		case <-bc.quit:
 			return
 		}
@@ -1584,10 +1602,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return i, err
 	}
 
-	// Make sure only one thread manipulates the chain at once
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
-
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1598,6 +1612,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		_, err := bc.hc.WriteHeader(header)
 		return err
 	}
+
+	// Make sure only one thread manipulates the chain at once
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
 	return bc.hc.InsertHeaderChain(chain, whFunc, start)
 }
@@ -1670,8 +1688,8 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	//bc.chainmu.Lock()
+	//defer bc.chainmu.Unlock()
 
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
