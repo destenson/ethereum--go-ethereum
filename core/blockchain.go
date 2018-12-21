@@ -1245,6 +1245,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		blockInsertTimer.UpdateSince(start)
 		stats.processed++
 		stats.usedGas += usedGas
+		stats.maxGas += block.GasLimit()
 
 		cache, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, cache)
